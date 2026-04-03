@@ -6,7 +6,8 @@
 
 use anyhow::{Context, Result};
 
-use crate::mcp::client::McpServerConfig;
+use crate::adapters::llm::providers::ProviderKind;
+use crate::adapters::mcp::client::McpServerConfig;
 
 pub struct Config {
     /// PostgreSQL URL (threads, runs, messages, memories).
@@ -17,6 +18,9 @@ pub struct Config {
 
     /// gRPC listen address for this agent service.
     pub grpc_addr: String,
+
+    /// Which LLM provider implementation to use.
+    pub llm_provider: ProviderKind,
 
     /// Path to skills directory on disk.
     pub skills_dir: String,
@@ -34,6 +38,9 @@ impl Config {
             database_url: required_env("DATABASE_URL")?,
             redis_url: required_env("REDIS_URL")?,
             grpc_addr: std::env::var("AGENT_GRPC_ADDR").unwrap_or_else(|_| "0.0.0.0:50060".into()),
+            llm_provider: optional_env("LLM_PROVIDER")
+                .unwrap_or_else(|| "anthropic".into())
+                .parse()?,
             skills_dir: std::env::var("SKILLS_DIR").unwrap_or_else(|_| "data/skills".into()),
             metrics_addr: std::env::var("METRICS_ADDR").unwrap_or_else(|_| "0.0.0.0:9090".into()),
             mcp_servers: optional_json_env("MCP_SERVERS_JSON")?,
@@ -58,6 +65,10 @@ impl Config {
 
 fn required_env(name: &str) -> Result<String> {
     std::env::var(name).context(format!("{name} is required"))
+}
+
+fn optional_env(name: &str) -> Option<String> {
+    std::env::var(name).ok()
 }
 
 fn optional_json_env<T>(name: &str) -> Result<T>

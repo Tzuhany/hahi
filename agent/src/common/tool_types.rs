@@ -2,10 +2,10 @@
 // Tool Types — Cross-Module Tool Contracts
 //
 // Types used by multiple modules to describe tool invocations, results,
-// and artifacts. Extracted from tool/definition.rs to break the dependency
+// and artifacts. Extracted from systems/tools/definition.rs to break the dependency
 // cycle where tool/ would otherwise need to import from llm/ for Message.
 //
-// The Tool trait itself stays in tool/definition.rs — it depends on these
+// The Tool trait itself stays in systems/tools/definition.rs — it depends on these
 // types but not the other way around.
 // ============================================================================
 

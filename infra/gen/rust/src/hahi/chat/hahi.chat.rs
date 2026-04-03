@@ -13,10 +13,41 @@ pub struct SendMessageRequest {
 pub struct SendMessageResponse {
     #[prost(string, tag = "1")]
     pub message_id: ::prost::alloc::string::String,
-    /// Redis Stream key (`results:{conversation_id}`) for Gateway SSE subscription.
-    /// The client connects to `GET /stream?key={stream_key}` to receive real-time events.
+    /// Redis Stream key (results:{conversation_id}) for Gateway SSE subscription.
+    /// The client connects to GET /stream?key={stream_key} to receive real-time events.
     #[prost(string, tag = "2")]
     pub stream_key: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ResumeRunRequest {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub user_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub control: ::core::option::Option<super::agent_event::ControlResponse>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CancelRunRequest {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CancelRunResponse {
+    #[prost(bool, tag = "1")]
+    pub cancelled: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetRunStatusRequest {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetRunStatusResponse {
+    #[prost(string, tag = "1")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub active_request_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetConversationRequest {

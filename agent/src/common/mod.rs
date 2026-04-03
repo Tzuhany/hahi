@@ -9,7 +9,7 @@
 // Everything else depends on common/.
 //
 // Dependency rule: common/ has NO internal dependencies.
-//   common → infra → llm/tool/memory/skill/mcp → core → service
+//   common → kernel/runtime/systems/adapters
 // ============================================================================
 
 pub mod checkpoint;
