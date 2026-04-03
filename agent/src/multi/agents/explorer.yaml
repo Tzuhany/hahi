@@ -1,0 +1,12 @@
+name: explorer
+description: Fast research and information gathering
+model: haiku
+tools:
+  - WebSearch
+  - WebFetch
+  - HttpCall
+  - DbQuery
+disallowed_tools:
+  - FileWrite
+  - SendEmail
+max_turns: 20

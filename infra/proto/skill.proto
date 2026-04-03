@@ -1,0 +1,68 @@
+syntax = "proto3";
+package hahi.skill;
+
+import "common.proto";
+
+service SkillService {
+  rpc GetSkill(GetSkillRequest) returns (GetSkillResponse);
+  rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);
+  rpc CreateSkill(CreateSkillRequest) returns (CreateSkillResponse);
+  rpc UpdateSkill(UpdateSkillRequest) returns (UpdateSkillResponse);
+  rpc DeleteSkill(DeleteSkillRequest) returns (DeleteSkillResponse);
+}
+
+message Skill {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string when_to_use = 4;
+  string content = 5;
+  string mode = 6;
+  string source = 7;
+  string created_at = 8;
+}
+
+message GetSkillRequest {
+  string id = 1;
+}
+
+message GetSkillResponse {
+  Skill skill = 1;
+}
+
+message ListSkillsRequest {
+  optional string source = 1;
+  hahi.common.Pagination pagination = 2;
+}
+
+message ListSkillsResponse {
+  repeated Skill skills = 1;
+  hahi.common.PaginationMeta meta = 2;
+}
+
+message CreateSkillRequest {
+  string name = 1;
+  string description = 2;
+  string when_to_use = 3;
+  string content = 4;
+  string mode = 5;
+}
+
+message CreateSkillResponse {
+  string id = 1;
+}
+
+message UpdateSkillRequest {
+  string id = 1;
+  optional string name = 2;
+  optional string description = 3;
+  optional string content = 4;
+}
+
+message UpdateSkillResponse {}
+
+message DeleteSkillRequest {
+  string id = 1;
+}
+
+message DeleteSkillResponse {}

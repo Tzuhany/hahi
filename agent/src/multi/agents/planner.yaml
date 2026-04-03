@@ -1,0 +1,9 @@
+name: planner
+description: Task planning and approach design
+model: haiku
+tools:
+  - WebSearch
+  - WebFetch
+  - HttpCall
+  - DbQuery
+max_turns: 15

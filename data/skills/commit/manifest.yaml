@@ -1,0 +1,4 @@
+name: commit
+description: Create a well-crafted git commit
+when_to_use: When the user asks to commit, save changes, or says /commit
+mode: inline

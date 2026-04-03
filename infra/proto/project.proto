@@ -1,0 +1,55 @@
+syntax = "proto3";
+package hahi.project;
+
+service ProjectService {
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+  rpc AddMember(AddMemberRequest) returns (AddMemberResponse);
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  string owner_id = 2;
+}
+
+message CreateProjectResponse {
+  string id = 1;
+}
+
+message GetProjectRequest {
+  string project_id = 1;
+}
+
+message GetProjectResponse {
+  string id = 1;
+  string name = 2;
+  string owner_id = 3;
+  string created_at = 4;
+}
+
+message CheckPermissionRequest {
+  string user_id = 1;
+  string project_id = 2;
+  string action = 3;
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+}
+
+message AddMemberRequest {
+  string project_id = 1;
+  string user_id = 2;
+  string role = 3;
+}
+
+message AddMemberResponse {}
+
+message RemoveMemberRequest {
+  string project_id = 1;
+  string user_id = 2;
+}
+
+message RemoveMemberResponse {}
