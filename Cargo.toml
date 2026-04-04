@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "apps/agent",
+    "apps/gateway",
+    "apps/session",
+    "contracts/gen/rust",
+]
+resolver = "2"

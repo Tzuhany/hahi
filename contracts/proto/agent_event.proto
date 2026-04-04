@@ -1,0 +1,439 @@
+syntax = "proto3";
+package hahi.agent_event;
+
+// ============================================================================
+// Agent Event Protocol
+//
+// Defines all events flowing between Agent workers, Gateway, and clients.
+// Inspired by Claude Code's SDK message protocol, adapted for cloud-native.
+//
+// Two directions:
+//   Inbound  — client → gateway → Redis Stream → agent
+//   Outbound — agent → Redis Stream → gateway → SSE → client
+//
+// Design principles:
+//   - Every event has session_id + event_id for routing and dedup
+//   - Events are self-describing (oneof discriminator, no external type field)
+//   - Outbound events map 1:1 to SSE events the client receives
+//   - Granularity matches what the UI needs to render, no more no less
+// ============================================================================
+
+
+// ============================================================================
+// Inbound Events (Client → Agent)
+// ============================================================================
+
+message InboundEvent {
+  string session_id = 1;
+  string event_id = 2;
+
+  oneof event {
+    UserMessage user_message = 10;
+    ControlResponse control_response = 11;
+    CancelRequest cancel = 12;
+    KeepAlive keep_alive = 13;
+  }
+}
+
+// User sends a message to start or continue a conversation turn.
+message UserMessage {
+  string conversation_id = 1;
+  string content = 2;
+
+  // If set, agent restores session from this checkpoint instead of starting fresh.
+  optional string checkpoint_key = 3;
+}
+
+// User responds to a control request (e.g., permission approval, plan review).
+message ControlResponse {
+  string request_id = 1;
+
+  oneof response {
+    PermissionDecision permission = 10;
+    PlanDecision plan_decision = 11;
+  }
+}
+
+message PermissionDecision {
+  bool allowed = 1;
+}
+
+// User's response to a PlanReviewRequest.
+message PlanDecision {
+  // approve: exit plan mode, execute the plan as-is
+  // modify:  stay in plan mode, agent revises based on user feedback
+  // reject:  exit plan mode, do nothing
+  string action = 1;
+
+  // User feedback when action is "modify".
+  // Agent uses this to refine the plan and re-submit for review.
+  optional string feedback = 2;
+}
+
+// User requests cancellation of the current turn.
+message CancelRequest {}
+
+// Connection keepalive.
+message KeepAlive {}
+
+
+// ============================================================================
+// Outbound Events (Agent → Client)
+// ============================================================================
+
+message OutboundEvent {
+  string session_id = 1;
+  string event_id = 2;
+
+  oneof event {
+    // — Session lifecycle —
+    SessionInit init = 10;
+    SessionStateChanged session_state = 11;
+
+    // — Streaming message content —
+    StreamEvent stream_event = 20;
+    AssistantMessage assistant = 21;
+
+    // — Turn lifecycle —
+    TurnResult result = 30;
+    TurnSummary turn_summary = 31;
+
+    // — Tool execution —
+    ToolStart tool_start = 40;
+    ToolProgress tool_progress = 41;
+    ToolResult tool_result = 42;
+    ToolSummary tool_summary = 43;
+
+    // — Control flow —
+    ControlRequest control_request = 50;
+
+    // — Sub-agent lifecycle —
+    TaskStarted task_started = 60;
+    TaskProgress task_progress = 61;
+    TaskDone task_done = 62;
+
+    // — System events —
+    CompactBoundary compact = 70;
+    RateLimitInfo rate_limit = 71;
+    Suggestion suggestion = 72;
+
+    // — Connection —
+    KeepAlive keep_alive = 80;
+    ErrorEvent error = 81;
+  }
+}
+
+
+// ============================================================================
+// Session Lifecycle
+// ============================================================================
+
+// Sent once at the start of a session. Tells the client what's available.
+message SessionInit {
+  string model = 1;
+  repeated string tools = 2;                // Available tool names
+  repeated string skills = 3;               // Available skill names
+  string version = 4;                       // Agent version
+}
+
+// Session-level state transitions.
+message SessionStateChanged {
+  // idle:            waiting for user input
+  // running:         agent is executing (tools available)
+  // planning:        agent is in plan mode (read-only tools, exploring approach)
+  // requires_action: agent needs user input (e.g., permission approval)
+  string state = 1;
+}
+
+
+// ============================================================================
+// Streaming Content
+// ============================================================================
+
+// A single streaming chunk from the LLM. Clients render these incrementally.
+message StreamEvent {
+  oneof delta {
+    string text = 1;              // Text token
+    string thinking = 2;          // Thinking/reasoning token
+    ToolUseStart tool_use = 3;    // Tool call detected in stream
+    string input_json = 4;        // Partial tool input JSON (streamed incrementally)
+  }
+
+  // Links this stream event to a parent tool_use_id when the LLM is responding
+  // within a sub-agent or tool context.
+  optional string parent_tool_use_id = 10;
+}
+
+// Indicates the LLM has started a tool call in the stream.
+message ToolUseStart {
+  string id = 1;
+  string name = 2;
+}
+
+// Complete assistant message, sent after streaming ends.
+// Contains the full content including all tool_use blocks.
+// Clients can use this to replace the streamed fragments with the canonical form.
+message AssistantMessage {
+  repeated ContentBlock content = 1;
+  optional string parent_tool_use_id = 2;
+}
+
+message ContentBlock {
+  oneof block {
+    TextBlock text = 1;
+    ThinkingBlock thinking = 2;
+    ToolUseBlock tool_use = 3;
+  }
+}
+
+message TextBlock {
+  string text = 1;
+}
+
+message ThinkingBlock {
+  string text = 1;
+}
+
+message ToolUseBlock {
+  string id = 1;
+  string name = 2;
+  string input_json = 3;         // Full tool input as JSON string
+}
+
+
+// ============================================================================
+// Turn Lifecycle
+// ============================================================================
+
+// Sent when the agent turn completes (success or failure).
+message TurnResult {
+  oneof outcome {
+    TurnSuccess success = 1;
+    TurnError error = 2;
+  }
+}
+
+message TurnSuccess {
+  string result = 1;              // Final text response
+  string stop_reason = 2;        // "completed", "max_turns"
+  uint32 num_turns = 3;          // Number of LLM calls in this turn
+  TurnUsage usage = 4;
+}
+
+message TurnError {
+  string reason = 1;             // "error", "max_turns", "context_overflow"
+  repeated string errors = 2;
+  uint32 num_turns = 3;
+  TurnUsage usage = 4;
+}
+
+message TurnUsage {
+  uint64 input_tokens = 1;
+  uint64 output_tokens = 2;
+  uint64 cache_read_tokens = 3;
+  uint64 cache_creation_tokens = 4;
+  uint64 duration_ms = 5;
+  double cost_usd = 6;
+}
+
+// Post-turn summary — a structured overview of what happened.
+// Clients can use this for notification badges, status indicators, etc.
+message TurnSummary {
+  // blocked / waiting / completed / review_ready / failed
+  string status_category = 1;
+  string title = 2;
+  string description = 3;
+  string recent_action = 4;      // "Edited 3 files"
+  string needs_action = 5;       // "Waiting for review" or empty
+}
+
+
+// ============================================================================
+// Tool Execution
+// ============================================================================
+
+// Tool has started executing.
+message ToolStart {
+  string tool_use_id = 1;
+  string tool_name = 2;
+  string input_preview = 3;      // Short preview of input for UI display
+}
+
+// Tool execution is in progress (long-running tools report intermediate state).
+message ToolProgress {
+  string tool_use_id = 1;
+  string tool_name = 2;
+  uint32 elapsed_seconds = 3;
+}
+
+// Tool execution completed.
+message ToolResult {
+  string tool_use_id = 1;
+  string tool_name = 2;
+  string content = 3;            // Result content (may be truncated for display)
+  bool is_error = 4;
+}
+
+// Cumulative summary of tool calls in the current turn.
+// e.g., "Searched 3 APIs, queried database 2 times"
+message ToolSummary {
+  string summary = 1;
+  repeated string tool_use_ids = 2;
+}
+
+
+// ============================================================================
+// Control Flow (Permission Requests)
+// ============================================================================
+
+// Agent needs user decision before proceeding.
+message ControlRequest {
+  string request_id = 1;
+
+  oneof request {
+    PermissionRequest permission = 10;
+    PlanReviewRequest plan_review = 11;
+  }
+}
+
+// Agent asks user to approve a tool invocation.
+message PermissionRequest {
+  string tool_name = 1;
+  string input_json = 2;         // Full tool input for user review
+  string description = 3;        // Human-readable description of what will happen
+}
+
+// Agent has finished planning and presents the plan for user approval.
+// User can approve (agent exits plan mode and executes), modify, or reject.
+message PlanReviewRequest {
+  string plan = 1;               // The proposed plan (markdown)
+  repeated string steps = 2;     // Structured step list
+}
+
+
+// ============================================================================
+// Sub-Agent / Task Lifecycle
+// ============================================================================
+
+// A sub-agent (background task) has been spawned.
+message TaskStarted {
+  string task_id = 1;
+  string description = 2;        // What this sub-agent is doing
+  optional string agent_type = 3; // "explorer", "planner", etc.
+}
+
+// Sub-agent reports progress.
+message TaskProgress {
+  string task_id = 1;
+  string description = 2;
+  optional string last_tool_name = 3;
+  optional string summary = 4;
+  TaskUsage usage = 5;
+}
+
+// Sub-agent has completed.
+message TaskDone {
+  string task_id = 1;
+  string status = 2;             // "completed", "failed", "stopped"
+  string summary = 3;
+  TaskUsage usage = 4;
+}
+
+message TaskUsage {
+  uint64 total_tokens = 1;
+  uint32 tool_uses = 2;
+  uint64 duration_ms = 3;
+}
+
+
+// ============================================================================
+// System Events
+// ============================================================================
+
+// Context was compacted. Clients may show a visual indicator.
+message CompactBoundary {
+  string trigger = 1;            // "auto" or "manual"
+  uint64 pre_tokens = 2;        // Token count before compaction
+}
+
+// Rate limiting information.
+message RateLimitInfo {
+  uint32 retry_after_seconds = 1;
+  string message = 2;
+}
+
+// Suggested next actions for the user.
+message Suggestion {
+  repeated string suggestions = 1;
+}
+
+// Error that doesn't end the turn but should be displayed.
+message ErrorEvent {
+  string message = 1;
+  bool recoverable = 2;
+}
+
+
+// ============================================================================
+// Redis Stream Contract
+//
+// Agent serializes these as prost bytes, base64-encodes them, and writes them
+// to the Redis Stream `results:{run_id}` under a single `event` field.
+// Session deserializes them back to SessionEvent for the app layer.
+//
+// This shared type is the single source of truth for the agent → session
+// event protocol. Adding a new event variant here is the only change needed
+// to make it visible to both sides; the compiler enforces exhaustive matching.
+// ============================================================================
+
+message AgentStreamEvent {
+  oneof event {
+    AgentStreamSessionStateChanged session_state_changed = 1;
+    AgentStreamTextDelta            text_delta            = 2;
+    AgentStreamThinkingDelta        thinking_delta        = 3;
+    AgentStreamToolStart            tool_start            = 4;
+    AgentStreamToolResult           tool_result           = 5;
+    AgentStreamTurnEnd              turn_end              = 6;
+    AgentStreamControlRequest       control_request       = 7;
+    AgentStreamCompacted            compacted             = 8;
+    AgentStreamCollapsed            collapsed             = 9;
+    AgentStreamHookBlocked          hook_blocked          = 10;
+    AgentStreamPlanModeChanged      plan_mode_changed     = 11;
+    AgentStreamRunFailed            run_failed            = 12;
+  }
+}
+
+message AgentStreamSessionStateChanged { string state = 1; }
+message AgentStreamTextDelta           { string text = 1; }
+message AgentStreamThinkingDelta       { string text = 1; }
+
+message AgentStreamToolStart {
+  string id            = 1;
+  string name          = 2;
+  string input_preview = 3;
+}
+
+message AgentStreamToolResult {
+  string id       = 1;
+  string name     = 2;
+  string content  = 3;
+  bool   is_error = 4;
+}
+
+message AgentStreamTurnEnd {
+  string stop_reason    = 1;
+  uint64 input_tokens   = 2;
+  uint64 output_tokens  = 3;
+}
+
+message AgentStreamControlRequest {
+  string request_id   = 1;
+  string kind         = 2;
+  string payload_json = 3;
+}
+
+message AgentStreamCompacted      { uint64 pre_tokens   = 1; }
+message AgentStreamCollapsed      { uint32 folded_count = 1; }
+message AgentStreamHookBlocked    { string hook_name = 1; string reason = 2; }
+message AgentStreamPlanModeChanged { string mode = 1; }
+message AgentStreamRunFailed      { string reason = 1; }

@@ -40,3 +40,5 @@ dist/
 lcov.info
 coverage/
 tarpaulin-report.html
+
+data/

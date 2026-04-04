@@ -123,7 +123,7 @@ Five principles shape every decision in the codebase.
 ## Agent Internals
 
 ```
-agent/src/
+apps/agent/src/
 │
 ├── common/          Zero-dependency domain types. The foundation.
 │   │                Everything else imports from here. It imports nothing.
@@ -292,11 +292,14 @@ cargo test
 
 ```
 hahi/
-├── agent/          Rust agent service (this repo's focus)
-├── gateway/        HTTP/SSE gateway (forwards gRPC → SSE)
-├── modules/        Conversation module (Thread/Run lifecycle)
-├── clients/        Web and mobile clients
-├── infra/          Proto definitions + generated code + Docker
+├── apps/
+│   ├── agent/      Execution runtime service
+│   ├── gateway/    HTTP/SSE ingress service
+│   └── session/    Conversation lifecycle service
+├── contracts/      Proto sources + generated multi-language bindings
+├── db/             Service migrations
+├── deploy/         Docker and deployment assets
+├── clients/        Web, mobile, and SDK consumers
 └── data/           Skills filesystem (manifest.yaml + prompt.md)
 ```
 

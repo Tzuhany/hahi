@@ -1,0 +1,19 @@
+syntax = "proto3";
+package hahi.events;
+
+// ============================================================================
+// EventFrame — transport-friendly execution event envelope
+//
+// Shared by session gRPC streaming, gateway SSE passthrough, and frontend
+// consumers. `type` carries the stable event semantic; `data_json` carries
+// the event payload as JSON so every consumer sees the same shape.
+// ============================================================================
+
+message EventFrame {
+  string cursor = 1;      // Redis Stream cursor (for replay / resume)
+  string run_id = 2;
+  string thread_id = 3;
+  string emitted_at = 4;  // RFC3339 timestamp
+  string type = 5;        // e.g. "run.started", "tool.result"
+  string data_json = 6;   // JSON payload for the event type
+}
